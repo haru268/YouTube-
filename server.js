@@ -9,13 +9,30 @@ try {
 const express = require('express');
 const session = require('express-session');
 
+// Vercel環境の判定（sqlite3読み込み前に必要）
+const isVercel = !!process.env.VERCEL;
+
 // sqlite3の読み込み（エラーハンドリング付き）
 let sqlite3;
+let sqlite3Available = false;
 try {
   sqlite3 = require('sqlite3').verbose();
+  sqlite3Available = true;
+  console.log('[INFO] sqlite3 loaded successfully');
 } catch (err) {
-  console.error('Failed to load sqlite3:', err);
-  throw new Error('SQLite3 module could not be loaded. This may be a native module compilation issue.');
+  console.error('[ERROR] Failed to load sqlite3:', err);
+  console.error('[ERROR] Error details:', {
+    name: err.name,
+    message: err.message,
+    code: err.code,
+    stack: err.stack
+  });
+  // Vercel環境ではエラーを投げずに続行（データベース機能は使えないが、サーバーは起動できる）
+  sqlite3Available = false;
+  if (!isVercel) {
+    // ローカル環境ではエラーを投げる
+    throw new Error('SQLite3 module could not be loaded. This may be a native module compilation issue.');
+  }
 }
 
 const bcrypt = require('bcrypt');
@@ -57,7 +74,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 // Vercel環境では/tmpディレクトリのみ書き込み可能
 // VERCEL環境変数が設定されている場合は/tmpを使用
-const isVercel = !!process.env.VERCEL;
+// isVercelは上で既に定義済み
 const DB_PATH = isVercel 
   ? path.join('/tmp', 'videos.db')
   : path.join(__dirname, 'videos.db');
@@ -192,6 +209,13 @@ let dbInitPromise = null;
 
 // データベース初期化関数
 async function initDatabase() {
+  // SQLite3が利用できない場合はエラーを返す
+  if (!sqlite3Available) {
+    const error = new Error('SQLite3 is not available. Database cannot be initialized.');
+    logError('データベース初期化エラー:', error);
+    throw error;
+  }
+  
   // 既に初期化済みの場合はスキップ
   if (dbInitialized) {
     return;
@@ -396,6 +420,9 @@ app.use('/api', async (req, res, next) => {
 
 // データベース接続ヘルパー（Promiseベース）
 function getDb() {
+  if (!sqlite3Available) {
+    throw new Error('SQLite3 is not available. Database operations cannot be performed.');
+  }
   return new sqlite3.Database(DB_PATH);
 }
 
