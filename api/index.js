@@ -3,6 +3,25 @@ let app = null;
 let initError = null;
 let initPromise = null;
 
+// 未処理の例外をキャッチ（起動時のクラッシュを防ぐ）
+process.on('uncaughtException', (error) => {
+  console.error('=== UNCAUGHT EXCEPTION ===');
+  console.error('Error name:', error.name);
+  console.error('Error message:', error.message);
+  console.error('Error code:', error.code);
+  console.error('Error stack:', error.stack);
+  initError = error;
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('=== UNHANDLED REJECTION ===');
+  console.error('Reason:', reason);
+  console.error('Promise:', promise);
+  if (reason instanceof Error) {
+    console.error('Error stack:', reason.stack);
+  }
+});
+
 async function initializeApp() {
   if (app) {
     return app;
@@ -18,11 +37,43 @@ async function initializeApp() {
       console.log('Vercel environment:', !!process.env.VERCEL);
       console.log('Node environment:', process.env.NODE_ENV);
       console.log('Node version:', process.version);
+      console.log('Current working directory:', process.cwd());
+      console.log('__dirname equivalent:', __dirname);
       
       // モジュールの読み込みを試行
       console.log('Loading server.js...');
-      app = require('../server.js');
-      console.log('Server.js loaded successfully');
+      
+      // 各モジュールを個別に読み込んでエラーを特定
+      try {
+        console.log('Loading express...');
+        require('express');
+        console.log('express loaded');
+      } catch (e) {
+        console.error('Failed to load express:', e);
+        throw e;
+      }
+      
+      try {
+        console.log('Loading sqlite3...');
+        require('sqlite3');
+        console.log('sqlite3 loaded');
+      } catch (e) {
+        console.error('Failed to load sqlite3:', e);
+        throw e;
+      }
+      
+      try {
+        console.log('Loading server.js module...');
+        app = require('../server.js');
+        console.log('Server.js loaded successfully');
+      } catch (loadError) {
+        console.error('Failed to load server.js:', loadError);
+        console.error('Load error name:', loadError.name);
+        console.error('Load error message:', loadError.message);
+        console.error('Load error code:', loadError.code);
+        console.error('Load error stack:', loadError.stack);
+        throw loadError;
+      }
       
       return app;
     } catch (error) {
@@ -35,6 +86,7 @@ async function initializeApp() {
       // エラーの詳細情報を記録
       if (error.code === 'MODULE_NOT_FOUND') {
         console.error('Module not found. Check if all dependencies are installed.');
+        console.error('Missing module path:', error.message);
       }
       if (error.message && error.message.includes('sqlite3')) {
         console.error('SQLite3 module error. This may be a native module compilation issue.');
