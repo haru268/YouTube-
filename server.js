@@ -13,13 +13,26 @@ const { validateVideoPlan, validatePostedVideo } = require('./middleware/validat
 const app = express();
 const PORT = process.env.PORT || 3000;
 // Vercel環境では/tmpディレクトリのみ書き込み可能
-// VERCEL環境変数が設定されているか、/tmpが存在する場合は/tmpを使用
-const isVercel = process.env.VERCEL || (fs.existsSync && fs.existsSync('/tmp'));
+// VERCEL環境変数が設定されている場合は/tmpを使用
+const isVercel = !!process.env.VERCEL;
 const DB_PATH = isVercel 
   ? path.join('/tmp', 'videos.db')
   : path.join(__dirname, 'videos.db');
 const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
 const isProduction = process.env.NODE_ENV === 'production';
+
+// Vercel環境では/tmpディレクトリが存在することを確認
+if (isVercel) {
+  const tmpDir = '/tmp';
+  if (!fs.existsSync(tmpDir)) {
+    try {
+      fs.mkdirSync(tmpDir, { recursive: true });
+      logInfo('/tmpディレクトリを作成しました');
+    } catch (err) {
+      logError('/tmpディレクトリの作成に失敗しました:', err);
+    }
+  }
+}
 
 // 環境変数の検証
 let SESSION_SECRET = process.env.SESSION_SECRET;
@@ -116,12 +129,32 @@ app.use((req, res, next) => {
 
 app.use(express.static('public'));
 
+// データベース初期化の状態を追跡
+let dbInitialized = false;
+let dbInitPromise = null;
+
 // データベース初期化関数
 async function initDatabase() {
-  return new Promise((resolve, reject) => {
+  // 既に初期化済みの場合はスキップ
+  if (dbInitialized) {
+    return;
+  }
+  
+  // 既に初期化中の場合は待機
+  if (dbInitPromise) {
+    return dbInitPromise;
+  }
+  
+  logInfo(`データベース初期化を開始します。パス: ${DB_PATH}, Vercel環境: ${isVercel}`);
+  
+  dbInitPromise = new Promise((resolve, reject) => {
     const db = new sqlite3.Database(DB_PATH, (err) => {
       if (err) {
         logError('データベース接続エラー:', err);
+        logError(`データベースパス: ${DB_PATH}`);
+        logError(`Vercel環境: ${isVercel}`);
+        logError(`エラー詳細: ${err.message}`);
+        dbInitPromise = null;
         reject(err);
         return;
       }
@@ -130,6 +163,7 @@ async function initDatabase() {
       db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
         if (err) {
           db.close();
+          dbInitPromise = null;
           reject(err);
           return;
         }
@@ -214,21 +248,77 @@ async function initDatabase() {
             `, (err) => {
               if (err) {
                 logError('テンプレートテーブル作成エラー:', err);
+                db.close();
+                dbInitPromise = null;
+                reject(err);
               } else {
                 logInfo('データベースの初期化が完了しました。');
+                db.close();
+                dbInitialized = true;
+                dbInitPromise = null;
+                resolve();
               }
-              db.close();
-              resolve();
             });
           });
         } else {
           db.close();
+          dbInitialized = true;
+          dbInitPromise = null;
           resolve();
         }
       });
     });
   });
+  
+  return dbInitPromise;
 }
+
+// 初期ユーザー作成の状態を追跡
+let userInitialized = false;
+
+// データベース初期化ミドルウェア（すべてのAPIリクエストの前に実行）
+app.use('/api', async (req, res, next) => {
+  try {
+    await initDatabase();
+    
+    // 初期ユーザーが存在しない場合は作成
+    if (!userInitialized) {
+      try {
+        const db = getDb();
+        const row = await dbGet(db, 'SELECT COUNT(*) as count FROM users');
+        if (row.count === 0) {
+          const username = process.env.INITIAL_USERNAME || 'admin';
+          let password = process.env.INITIAL_PASSWORD;
+          
+          if (!password || password.length < 8) {
+            console.warn('警告: 初期パスワードが設定されていないか、8文字未満です。');
+            if (!password) {
+              password = 'admin123';
+              console.warn('デフォルトパスワード（admin123）が使用されます。すぐに変更してください。');
+            }
+          }
+          
+          const hash = await bcrypt.hash(password, 10);
+          await dbRun(db, 'INSERT INTO users (username, password) VALUES (?, ?)', [username, hash]);
+          logInfo('初期ユーザーが作成されました。');
+        }
+        db.close();
+        userInitialized = true;
+      } catch (err) {
+        logError('初期ユーザー作成エラー:', err);
+        // エラーが発生しても続行（既にユーザーが存在する可能性がある）
+      }
+    }
+    
+    next();
+  } catch (err) {
+    logError('データベース初期化ミドルウェアエラー:', err);
+    res.status(500).json({ 
+      error: 'データベースの初期化に失敗しました',
+      message: err.message 
+    });
+  }
+});
 
 // データベース接続ヘルパー（Promiseベース）
 function getDb() {
@@ -1347,11 +1437,13 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-// サーバー起動時の初期化
-// データベースは自動的に初期化されるため、明示的なチェックは不要
-initUser().catch(err => {
-  logError('起動時の初期化エラー:', err);
-});
+// サーバー起動時の初期化（ローカル開発環境のみ）
+// Vercel環境では、リクエスト時にミドルウェアで初期化される
+if (require.main === module) {
+  initUser().catch(err => {
+    logError('起動時の初期化エラー:', err);
+  });
+}
 
 // モジュールとして require された場合（Vercel serverless）は app をエクスポート
 // 直接実行された場合（ローカル開発）は listen を実行

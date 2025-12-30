@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "node dev-server.js",
     "init-db": "node scripts/init-db.js",
     "migrate-db": "node scripts/migrate-db.js",
     "migrate-db-v2": "node scripts/migrate-db-v2.js"
