@@ -12,22 +12,29 @@ const { validateVideoPlan, validatePostedVideo } = require('./middleware/validat
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DB_PATH = path.join(__dirname, 'videos.db');
+// Vercel環境では/tmpディレクトリのみ書き込み可能
+// VERCEL環境変数が設定されているか、/tmpが存在する場合は/tmpを使用
+const isVercel = process.env.VERCEL || (fs.existsSync && fs.existsSync('/tmp'));
+const DB_PATH = isVercel 
+  ? path.join('/tmp', 'videos.db')
+  : path.join(__dirname, 'videos.db');
 const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
 const isProduction = process.env.NODE_ENV === 'production';
 
 // 環境変数の検証
-const SESSION_SECRET = process.env.SESSION_SECRET;
+let SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET || SESSION_SECRET === 'your-secret-key-change-this') {
-  const errorMsg = 'エラー: SESSION_SECRETが設定されていません。Vercelの環境変数設定でSESSION_SECRETを設定してください。';
-  console.error(errorMsg);
-  // サーバーレス環境では process.exit を避け、エラーハンドリングミドルウェアで処理
-  if (require.main === module) {
-    // ローカル開発環境でのみ exit
-    process.exit(1);
+  const errorMsg = '警告: SESSION_SECRETが設定されていません。Vercelの環境変数設定でSESSION_SECRETを設定してください。';
+  console.warn(errorMsg);
+  // 開発環境ではデフォルト値を使用（本番環境では使用しない）
+  if (!isProduction && require.main === module) {
+    SESSION_SECRET = 'dev-secret-key-change-in-production-' + Math.random().toString(36);
+    console.warn('開発環境用の一時的なSESSION_SECRETが生成されました。本番環境では必ず設定してください。');
+  } else if (isProduction || !require.main === module) {
+    // 本番環境またはサーバーレス環境では、ランダムな値を生成（セッションはリクエスト間で保持されない）
+    SESSION_SECRET = process.env.SESSION_SECRET || 'temp-secret-' + Date.now();
+    logWarn('SESSION_SECRETが設定されていません。セッションが正しく機能しない可能性があります。');
   }
-  // サーバーレス環境では警告のみ（実際のセッション処理でエラーが発生する）
-  logWarn(errorMsg);
 }
 
 if (SESSION_SECRET && SESSION_SECRET.length < 32) {
@@ -84,7 +91,12 @@ app.use(session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
+  cookie: { 
+    secure: isProduction, // 本番環境ではHTTPS必須
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
+  }
 }));
 
 // JSONペイロードのサイズ制限
@@ -103,6 +115,120 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static('public'));
+
+// データベース初期化関数
+async function initDatabase() {
+  return new Promise((resolve, reject) => {
+    const db = new sqlite3.Database(DB_PATH, (err) => {
+      if (err) {
+        logError('データベース接続エラー:', err);
+        reject(err);
+        return;
+      }
+      
+      // テーブルが存在するかチェック
+      db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
+        if (err) {
+          db.close();
+          reject(err);
+          return;
+        }
+        
+        if (!row) {
+          // テーブルが存在しない場合は作成
+          logInfo('データベースを初期化しています...');
+          db.serialize(() => {
+            // ユーザーテーブル
+            db.run(`
+              CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              )
+            `);
+            
+            // チャンネル設定テーブル
+            db.run(`
+              CREATE TABLE IF NOT EXISTS channel_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_name TEXT NOT NULL,
+                channel_url TEXT NOT NULL,
+                channel_image_url TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              )
+            `);
+            
+            // 動画予定テーブル
+            db.run(`
+              CREATE TABLE IF NOT EXISTS video_plans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                no INTEGER NOT NULL,
+                type TEXT NOT NULL CHECK(type IN ('動画', 'ショート')),
+                title TEXT NOT NULL,
+                intro_content TEXT,
+                narration_content TEXT,
+                tags TEXT,
+                category TEXT,
+                reminder_date DATETIME,
+                is_posted INTEGER DEFAULT 0 CHECK(is_posted IN (0, 1)),
+                posted_at DATETIME,
+                draft_content TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              )
+            `);
+            
+            // 投稿済み動画テーブル
+            db.run(`
+              CREATE TABLE IF NOT EXISTS posted_videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                video_id TEXT UNIQUE,
+                no INTEGER DEFAULT 0,
+                title TEXT NOT NULL,
+                type TEXT NOT NULL CHECK(type IN ('動画', 'ショート')),
+                published_at DATETIME,
+                thumbnail_url TEXT,
+                view_count INTEGER DEFAULT 0,
+                like_count INTEGER DEFAULT 0,
+                url TEXT,
+                is_converted_to_video INTEGER DEFAULT 0 CHECK(is_converted_to_video IN (0, 1)),
+                is_public INTEGER DEFAULT 1 CHECK(is_public IN (0, 1)),
+                tags TEXT,
+                category TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              )
+            `);
+            
+            // テンプレートテーブル
+            db.run(`
+              CREATE TABLE IF NOT EXISTS templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL CHECK(type IN ('動画', 'ショート')),
+                intro_content TEXT,
+                narration_content TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              )
+            `, (err) => {
+              if (err) {
+                logError('テンプレートテーブル作成エラー:', err);
+              } else {
+                logInfo('データベースの初期化が完了しました。');
+              }
+              db.close();
+              resolve();
+            });
+          });
+        } else {
+          db.close();
+          resolve();
+        }
+      });
+    });
+  });
+}
 
 // データベース接続ヘルパー（Promiseベース）
 function getDb() {
@@ -151,34 +277,41 @@ function dbRun(db, query, params = []) {
 
 // 初期ユーザー作成（初回起動時のみ）
 async function initUser() {
-  const db = getDb();
   try {
-    const row = await dbGet(db, 'SELECT COUNT(*) as count FROM users');
-    if (row.count === 0) {
-      const username = process.env.INITIAL_USERNAME || 'admin';
-      let password = process.env.INITIAL_PASSWORD;
-      
-      // パスワードの検証
-      if (!password || password.length < 8) {
-        console.warn('警告: 初期パスワードが設定されていないか、8文字未満です。');
-        console.warn('強力なパスワードを.envファイルのINITIAL_PASSWORDに設定してください。');
-        if (!password) {
-          password = 'admin123';
-          console.warn('デフォルトパスワード（admin123）が使用されます。すぐに変更してください。');
+    // まずデータベースを初期化
+    await initDatabase();
+    
+    const db = getDb();
+    try {
+      const row = await dbGet(db, 'SELECT COUNT(*) as count FROM users');
+      if (row.count === 0) {
+        const username = process.env.INITIAL_USERNAME || 'admin';
+        let password = process.env.INITIAL_PASSWORD;
+        
+        // パスワードの検証
+        if (!password || password.length < 8) {
+          console.warn('警告: 初期パスワードが設定されていないか、8文字未満です。');
+          console.warn('強力なパスワードを環境変数INITIAL_PASSWORDに設定してください。');
+          if (!password) {
+            password = 'admin123';
+            console.warn('デフォルトパスワード（admin123）が使用されます。すぐに変更してください。');
+          }
+        }
+        
+        const hash = await bcrypt.hash(password, 10);
+        await dbRun(db, 'INSERT INTO users (username, password) VALUES (?, ?)', [username, hash]);
+        logInfo('初期ユーザーが作成されました。');
+        if (password === 'admin123' || password.length < 8) {
+          logWarn('重要: 初回ログイン後、必ず強力なパスワードに変更してください。');
         }
       }
-      
-      const hash = await bcrypt.hash(password, 10);
-      await dbRun(db, 'INSERT INTO users (username, password) VALUES (?, ?)', [username, hash]);
-      logInfo('初期ユーザーが作成されました。');
-      if (password === 'admin123' || password.length < 8) {
-        logWarn('重要: 初回ログイン後、必ず強力なパスワードに変更してください。');
-      }
+      db.close();
+    } catch (err) {
+      logError('初期ユーザー作成エラー:', err);
+      db.close();
     }
-    db.close();
   } catch (err) {
-    logError('初期ユーザー作成エラー:', err);
-    db.close();
+    logError('データベース初期化エラー:', err);
   }
 }
 
@@ -1170,23 +1303,27 @@ app.get('/api/templates/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ルート
+app.get('/', requireAuth, (req, res) => {
+  res.redirect('/top.html');
+});
+
 // グローバルエラーハンドラー（すべてのルートの後に配置）
 app.use((err, req, res, next) => {
   logError('エラーハンドラー:', err);
+  // 既にレスポンスが送信されている場合は何もしない
+  if (res.headersSent) {
+    return next(err);
+  }
   res.status(err.status || 500).json({
     error: err.message || '内部サーバーエラーが発生しました',
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
   });
 });
 
-// 404ハンドラー
+// 404ハンドラー（すべてのルートの後に配置）
 app.use((req, res) => {
   res.status(404).json({ error: 'リソースが見つかりません' });
-});
-
-// ルート
-app.get('/', requireAuth, (req, res) => {
-  res.redirect('/top.html');
 });
 
 // グレースフルシャットダウン
@@ -1210,12 +1347,11 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-// サーバー起動
-if (!fs.existsSync(DB_PATH)) {
-  logWarn('データベースファイルが見つかりません。初期化スクリプトを実行してください: npm run init-db');
-}
-
-initUser();
+// サーバー起動時の初期化
+// データベースは自動的に初期化されるため、明示的なチェックは不要
+initUser().catch(err => {
+  logError('起動時の初期化エラー:', err);
+});
 
 // モジュールとして require された場合（Vercel serverless）は app をエクスポート
 // 直接実行された場合（ローカル開発）は listen を実行
