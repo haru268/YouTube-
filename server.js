@@ -14,15 +14,23 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'videos.db');
 const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+const isProduction = process.env.NODE_ENV === 'production';
 
 // 環境変数の検証
 const SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET || SESSION_SECRET === 'your-secret-key-change-this') {
-  console.error('エラー: SESSION_SECRETが設定されていません。.envファイルで設定してください。');
-  process.exit(1);
+  const errorMsg = 'エラー: SESSION_SECRETが設定されていません。Vercelの環境変数設定でSESSION_SECRETを設定してください。';
+  console.error(errorMsg);
+  // サーバーレス環境では process.exit を避け、エラーハンドリングミドルウェアで処理
+  if (require.main === module) {
+    // ローカル開発環境でのみ exit
+    process.exit(1);
+  }
+  // サーバーレス環境では警告のみ（実際のセッション処理でエラーが発生する）
+  logWarn(errorMsg);
 }
 
-if (SESSION_SECRET.length < 32) {
+if (SESSION_SECRET && SESSION_SECRET.length < 32) {
   console.warn('警告: SESSION_SECRETは32文字以上にすることを推奨します。');
 }
 
@@ -1162,6 +1170,20 @@ app.get('/api/templates/:id', requireAuth, async (req, res) => {
   }
 });
 
+// グローバルエラーハンドラー（すべてのルートの後に配置）
+app.use((err, req, res, next) => {
+  logError('エラーハンドラー:', err);
+  res.status(err.status || 500).json({
+    error: err.message || '内部サーバーエラーが発生しました',
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+  });
+});
+
+// 404ハンドラー
+app.use((req, res) => {
+  res.status(404).json({ error: 'リソースが見つかりません' });
+});
+
 // ルート
 app.get('/', requireAuth, (req, res) => {
   res.redirect('/top.html');
@@ -1195,12 +1217,18 @@ if (!fs.existsSync(DB_PATH)) {
 
 initUser();
 
-const isProduction = process.env.NODE_ENV === 'production';
-
-app.listen(PORT, () => {
-  logInfo(`サーバーが起動しました: http://localhost:${PORT}`);
-  if (!isProduction) {
-    logWarn('開発モードで実行中です。本番環境ではNODE_ENV=productionを設定してください。');
-  }
-});
+// モジュールとして require された場合（Vercel serverless）は app をエクスポート
+// 直接実行された場合（ローカル開発）は listen を実行
+if (require.main === module) {
+  // ローカル開発環境では通常通り listen
+  app.listen(PORT, () => {
+    logInfo(`サーバーが起動しました: http://localhost:${PORT}`);
+    if (!isProduction) {
+      logWarn('開発モードで実行中です。本番環境ではNODE_ENV=productionを設定してください。');
+    }
+  });
+} else {
+  // Vercel環境では app をエクスポート（api/index.js で使用）
+  module.exports = app;
+}
 
