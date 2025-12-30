@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>投稿済み動画管理 - 動画管理</title>
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/posted-videos.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>動画管理システム</h1>
+      <nav class="nav-menu">
+        <a href="top.html" class="nav-item" aria-label="トップページ">トップ</a>
+        <a href="video-plans.html" class="nav-item" aria-label="動画予定管理">動画予定</a>
+        <a href="posted-videos.html" class="nav-item active" aria-label="投稿済み動画管理">投稿済み動画</a>
+        <a href="statistics.html" class="nav-item" aria-label="統計・分析">統計</a>
+        <a href="calendar.html" class="nav-item" aria-label="カレンダー表示">カレンダー</a>
+        <a href="settings.html" class="nav-item" aria-label="設定">設定</a>
+        <button id="logoutBtn" class="nav-item btn-logout" aria-label="ログアウト">ログアウト</button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h2>投稿済み動画管理</h2>
+        <button id="addVideoBtn" class="btn btn-primary" aria-label="新しい動画を追加">新規追加</button>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-row">
+          <div class="search-input-wrapper">
+            <input type="text" id="searchInput" placeholder="タイトルや内容で検索..." class="search-input">
+          </div>
+          <div class="filter-tabs">
+            <button class="tab-btn active" data-type="" aria-label="すべての動画を表示">すべて</button>
+            <button class="tab-btn" data-type="動画" aria-label="動画のみ表示">動画</button>
+            <button class="tab-btn" data-type="ショート" aria-label="ショートのみ表示">ショート</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <button id="selectAllBtn" class="btn btn-secondary" style="display: none;">すべて選択</button>
+          <button id="deselectAllBtn" class="btn btn-secondary" style="display: none;">選択解除</button>
+          <button id="bulkDeleteBtn" class="btn btn-danger" style="display: none;">選択した項目を削除</button>
+        </div>
+      </div>
+
+      <div id="videosList" class="videos-list"></div>
+    </main>
+  </div>
+
+  <!-- モーダル -->
+  <div id="videoModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">動画の追加</h3>
+        <button class="modal-close" id="closeModal">&times;</button>
+      </div>
+      <form id="videoForm" class="modal-body">
+        <input type="hidden" id="videoId">
+        <div class="form-group">
+          <label for="videoNo">No</label>
+          <input type="number" id="videoNo" required min="1" aria-label="動画の番号">
+        </div>
+        <div class="form-group">
+          <label for="videoType">種類</label>
+          <select id="videoType" required aria-label="動画の種類を選択">
+            <option value="動画">動画</option>
+            <option value="ショート">ショート</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="videoTitle">タイトル <span style="color: #c62828;">*</span></label>
+          <input type="text" id="videoTitle" required aria-label="動画のタイトル" aria-required="true">
+        </div>
+        <div class="form-group">
+          <label for="videoPublishedAt">投稿日 <span style="color: #c62828;">*</span></label>
+          <input type="date" id="videoPublishedAt" required aria-label="動画の投稿日" aria-required="true">
+        </div>
+        <div class="form-group">
+          <label>サムネイル画像</label>
+          <div class="thumbnail-upload-section">
+            <div class="thumbnail-preview-container">
+              <img id="thumbnailPreview" class="thumbnail-preview" src="" alt="プレビュー" style="display: none;">
+            </div>
+            <div class="thumbnail-upload-controls">
+              <input type="file" id="thumbnailFile" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" style="display: none;">
+              <button type="button" id="selectThumbnailBtn" class="btn btn-secondary">ファイルを選択</button>
+              <button type="button" id="removeThumbnailBtn" class="btn btn-secondary" style="display: none;">画像を削除</button>
+            </div>
+            <input type="hidden" id="thumbnailUrl">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="videoUrl">動画URL（オプション）</label>
+          <input type="url" id="videoUrl" placeholder="https://www.youtube.com/watch?v=...">
+        </div>
+        <div class="form-group">
+          <label for="videoViewCount">視聴回数（オプション）</label>
+          <input type="number" id="videoViewCount" min="0" placeholder="例: 1000" aria-label="動画の視聴回数">
+          <span class="form-hint">YouTubeの視聴回数を手動で入力してください</span>
+        </div>
+        <div class="form-group">
+          <label for="videoLikeCount">いいね数（オプション）</label>
+          <input type="number" id="videoLikeCount" min="0" placeholder="例: 50" aria-label="動画のいいね数">
+          <span class="form-hint">YouTubeのいいね数を手動で入力してください</span>
+        </div>
+        <div id="shortOptions" class="form-group" style="display: none;">
+          <label>
+            <input type="checkbox" id="isConvertedToVideo"> 動画に変換済み
+          </label>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="isPublic" checked> 公開
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelBtn">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ローディングオーバーレイ -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p id="loadingText" style="margin-left: 1rem; color: #333;">読み込み中...</p>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/keyboard-navigation.js"></script>
+  <script src="js/posted-videos.js"></script>
+</body>
+</html>
+

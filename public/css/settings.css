@@ -1,0 +1,62 @@
+.settings-section {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.settings-section h3 {
+  font-size: 1.3rem;
+  color: #333333;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.settings-form {
+  max-width: 600px;
+}
+
+.settings-form .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.settings-form .btn {
+  margin-top: 0.5rem;
+}
+
+.image-upload-section {
+  margin-top: 0.5rem;
+}
+
+.image-preview-container {
+  margin-bottom: 1rem;
+}
+
+.image-preview {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  object-fit: cover;
+}
+
+.image-upload-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.image-url-input {
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.image-url-input label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #666666;
+  font-size: 0.85rem;
+}
+

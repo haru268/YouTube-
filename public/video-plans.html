@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>動画予定 - 動画管理</title>
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/loading.css">
+  <link rel="stylesheet" href="css/video-plans.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>動画管理システム</h1>
+      <nav class="nav-menu">
+        <a href="top.html" class="nav-item" aria-label="トップページ">トップ</a>
+        <a href="video-plans.html" class="nav-item active" aria-label="動画予定管理">動画予定</a>
+        <a href="posted-videos.html" class="nav-item" aria-label="投稿済み動画管理">投稿済み動画</a>
+        <a href="statistics.html" class="nav-item" aria-label="統計・分析">統計</a>
+        <a href="calendar.html" class="nav-item" aria-label="カレンダー表示">カレンダー</a>
+        <a href="settings.html" class="nav-item" aria-label="設定">設定</a>
+        <button id="logoutBtn" class="nav-item btn-logout" aria-label="ログアウト">ログアウト</button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h2>動画予定管理</h2>
+        <div class="header-actions">
+          <button id="importCsvBtn" class="btn btn-secondary" aria-label="CSVファイルから動画予定を読み込む">CSV読み込み</button>
+          <button id="addPlanBtn" class="btn btn-primary" aria-label="動画予定を手動で追加">手動追加</button>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-row">
+          <div class="search-input-wrapper">
+            <input type="text" id="searchInput" placeholder="タイトルや内容で検索..." class="search-input">
+          </div>
+          <div class="filter-tabs">
+            <button class="tab-btn active" data-filter="" aria-label="すべての動画予定を表示">すべて</button>
+            <button class="tab-btn" data-filter="未投稿" aria-label="未投稿の動画予定を表示">未投稿</button>
+            <button class="tab-btn" data-filter="投稿済み" aria-label="投稿済みの動画予定を表示">投稿済み</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <button id="selectAllBtn" class="btn btn-secondary" style="display: none;">すべて選択</button>
+          <button id="deselectAllBtn" class="btn btn-secondary" style="display: none;">選択解除</button>
+          <button id="bulkDeleteBtn" class="btn btn-danger" style="display: none;">選択した項目を削除</button>
+          <button id="bulkMoveToPostedBtn" class="btn btn-primary" style="display: none;">選択項目を投稿済みに移動</button>
+        </div>
+      </div>
+
+      <div id="plansList" class="plans-list"></div>
+    </main>
+  </div>
+
+  <!-- ローディングオーバーレイ -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p id="loadingText" style="margin-left: 1rem; color: #333;">読み込み中...</p>
+  </div>
+
+  <!-- CSVインポートモーダル -->
+  <div id="csvModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>CSV読み込み</h3>
+        <button class="modal-close" id="closeCsvModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="csvFile">CSVファイルを選択</label>
+          <input type="file" id="csvFile" accept=".csv" class="file-input">
+          <div class="csv-format-hint">
+            <p><strong>CSV形式:</strong></p>
+            <p>1行目: ヘッダー行（種類,タイトル,冒頭内容,ナレーション内容）</p>
+            <p>2行目以降: データ行</p>
+            <p>例:</p>
+            <pre>種類,タイトル,冒頭内容,ナレーション内容
+ショート,動画タイトル1,冒頭の内容,ナレーションの内容
+動画,動画タイトル2,冒頭の内容2,ナレーションの内容2</pre>
+          </div>
+        </div>
+        <div id="csvPreview" class="csv-preview"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelCsvBtn">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="importCsvBtnConfirm" disabled>インポート</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- モーダル -->
+  <div id="planModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">動画予定の追加</h3>
+        <button class="modal-close" id="closeModal">&times;</button>
+      </div>
+      <form id="planForm" class="modal-body">
+        <input type="hidden" id="planId">
+        <div class="form-group">
+          <label for="planNo">No <span class="form-hint">（自動設定されます）</span></label>
+          <input type="number" id="planNo" readonly style="background-color: #f5f5f5; cursor: not-allowed; color: #666666;" aria-label="動画予定の番号（自動設定）">
+        </div>
+        <div class="form-group" id="draftNotice" style="display: none; padding: 0.75rem; background-color: #fff3e0; border: 1px solid #ffb74d; border-radius: 4px; color: #e65100; font-size: 0.9rem;">
+          <strong>下書きが保存されています。</strong> 下書きを読み込むには、ページを再読み込みしてください。
+        </div>
+        <div class="form-group">
+          <label for="planType">種類</label>
+          <select id="planType" required aria-label="動画の種類を選択">
+            <option value="動画">動画</option>
+            <option value="ショート">ショート</option>
+          </select>
+        </div>
+        <div class="form-group" id="draftNotice" style="display: none; padding: 0.75rem; background-color: #fff3e0; border: 1px solid #ffb74d; border-radius: 4px; color: #e65100; font-size: 0.9rem; margin-bottom: 1rem;">
+          <strong>下書きが保存されています。</strong> 下書きを読み込むには、ページを再読み込みしてください。
+        </div>
+        <div class="form-group">
+          <label for="planTitle">タイトル <span style="color: #c62828;">*</span></label>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="planTitle" required aria-label="動画のタイトル" aria-required="true" style="flex: 1;">
+            <button type="button" id="previewBtn" class="btn btn-secondary" style="white-space: nowrap;">プレビュー</button>
+          </div>
+          <span class="form-hint" id="planTitleError" style="color: #c62828; display: none;"></span>
+        </div>
+        <div class="form-group">
+          <label for="planIntro">冒頭内容</label>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+            <select id="templateSelect" style="flex: 1; min-width: 200px;" onchange="loadTemplate()">
+              <option value="">テンプレートから選択...</option>
+            </select>
+            <button type="button" id="saveAsTemplateBtn" class="btn btn-secondary" style="white-space: nowrap;">テンプレート保存</button>
+          </div>
+          <textarea id="planIntro" rows="4"></textarea>
+          <button type="button" id="saveDraftBtn" class="btn btn-secondary" style="margin-top: 0.5rem; font-size: 0.85rem;">下書き保存</button>
+        </div>
+        <div class="form-group">
+          <label for="planNarration">ナレーション内容</label>
+          <textarea id="planNarration" rows="6"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="planTags">タグ（カンマ区切り）</label>
+          <input type="text" id="planTags" placeholder="例: 雑学, 科学, 面白い">
+        </div>
+        <div class="form-group">
+          <label for="planCategory">カテゴリー</label>
+          <input type="text" id="planCategory" placeholder="例: 教育, エンタメ">
+        </div>
+        <div class="form-group">
+          <label for="planReminder">リマインダー日時（オプション）</label>
+          <input type="datetime-local" id="planReminder">
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="planPosted"> 投稿済み
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelBtn">キャンセル</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/keyboard-navigation.js"></script>
+  <script src="js/video-plans.js"></script>
+</body>
+</html>
+

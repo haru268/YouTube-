@@ -1,0 +1,47 @@
+# 依存パッケージ
+node_modules/
+
+# 環境変数ファイル（機密情報）
+.env
+.env.local
+.env.*.local
+
+# データベースファイル
+*.db
+*.sqlite
+*.sqlite3
+
+# ログファイル
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS固有のファイル
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# アップロードファイル
+public/uploads/
+
+# 一時ファイル
+*.tmp
+*.temp
+.cache/
+
+# IDE設定ファイル（オプション）
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# テスト結果ファイル（必要に応じてコメントアウト）
+# TEST_RESULTS.md
+# FINAL_REVIEW.md
+

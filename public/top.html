@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>トップ - 動画管理</title>
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/top.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>動画管理システム</h1>
+      <nav class="nav-menu">
+        <a href="top.html" class="nav-item active" aria-label="トップページ">トップ</a>
+        <a href="video-plans.html" class="nav-item" aria-label="動画予定管理">動画予定</a>
+        <a href="posted-videos.html" class="nav-item" aria-label="投稿済み動画管理">投稿済み動画</a>
+        <a href="statistics.html" class="nav-item" aria-label="統計・分析">統計</a>
+        <a href="calendar.html" class="nav-item" aria-label="カレンダー表示">カレンダー</a>
+        <a href="settings.html" class="nav-item" aria-label="設定">設定</a>
+        <button id="logoutBtn" class="nav-item btn-logout" aria-label="ログアウト">ログアウト</button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <div id="channelInfo" class="channel-info">
+        <div id="channelNotSet" class="message-box">
+          <p>チャンネル情報が設定されていません。</p>
+          <a href="settings.html" class="btn btn-primary">設定画面へ</a>
+        </div>
+      </div>
+
+      <div class="videos-section">
+        <div class="section-header">
+          <h2>投稿済み動画</h2>
+          <div class="header-controls">
+            <div class="filter-tabs">
+              <button class="tab-btn active" data-type="" aria-label="すべての動画を表示">すべて</button>
+              <button class="tab-btn" data-type="動画" aria-label="動画のみ表示">動画</button>
+              <button class="tab-btn" data-type="ショート" aria-label="ショートのみ表示">ショート</button>
+            </div>
+            <div class="action-buttons">
+              <button id="fetchVideosBtn" class="btn btn-secondary" aria-label="YouTubeから動画を取得">YouTubeから取得</button>
+              <a href="posted-videos.html" class="btn btn-primary">動画を追加</a>
+            </div>
+          </div>
+        </div>
+        <div id="videosList" class="videos-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ローディングオーバーレイ -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p id="loadingText" style="margin-left: 1rem; color: #333;">読み込み中...</p>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/top.js"></script>
+</body>
+</html>
+

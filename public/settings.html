@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>設定 - 動画管理</title>
+  <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/settings.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>動画管理システム</h1>
+      <nav class="nav-menu">
+        <a href="top.html" class="nav-item" aria-label="トップページ">トップ</a>
+        <a href="video-plans.html" class="nav-item" aria-label="動画予定管理">動画予定</a>
+        <a href="posted-videos.html" class="nav-item" aria-label="投稿済み動画管理">投稿済み動画</a>
+        <a href="statistics.html" class="nav-item" aria-label="統計・分析">統計</a>
+        <a href="calendar.html" class="nav-item" aria-label="カレンダー表示">カレンダー</a>
+        <a href="settings.html" class="nav-item active" aria-label="設定">設定</a>
+        <button id="logoutBtn" class="nav-item btn-logout" aria-label="ログアウト">ログアウト</button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <h2>設定</h2>
+
+      <section class="settings-section">
+        <h3>チャンネル情報</h3>
+        <form id="channelForm" class="settings-form">
+          <div class="form-group">
+            <label for="channelName">チャンネル名 <span style="color: #c62828;">*</span></label>
+            <input type="text" id="channelName" required aria-label="チャンネル名" aria-required="true">
+          </div>
+          <div class="form-group">
+            <label for="channelUrl">チャンネルURL <span style="color: #c62828;">*</span></label>
+            <input type="url" id="channelUrl" required aria-label="チャンネルURL" aria-required="true" placeholder="https://www.youtube.com/@...">
+          </div>
+          <div class="form-group">
+            <label>チャンネル画像（オプション）</label>
+            <div class="image-upload-section">
+              <div class="image-preview-container">
+                <img id="channelImagePreview" class="image-preview" src="" alt="プレビュー" style="display: none;">
+              </div>
+              <div class="image-upload-controls">
+                <input type="file" id="channelImageFile" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" style="display: none;">
+                <button type="button" id="selectImageBtn" class="btn btn-secondary">ファイルを選択</button>
+                <button type="button" id="removeImageBtn" class="btn btn-secondary" style="display: none;">画像を削除</button>
+              </div>
+              <input type="hidden" id="channelImageUrl">
+              <div class="image-url-input" style="margin-top: 1rem;">
+                <label for="channelImageUrlInput">または、画像URLを直接入力</label>
+                <input type="text" id="channelImageUrlInput" placeholder="https://... または /uploads/...">
+              </div>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </form>
+      </section>
+
+      <section class="settings-section">
+        <h3>ユーザー名変更</h3>
+        <form id="usernameForm" class="settings-form">
+          <div class="form-group">
+            <label for="newUsername">ユーザー名 <span style="color: #c62828;">*</span></label>
+            <input type="text" id="newUsername" required aria-label="新しいユーザー名" aria-required="true">
+          </div>
+          <div id="usernameMessage" class="message"></div>
+          <button type="submit" class="btn btn-primary">変更</button>
+        </form>
+      </section>
+
+      <section class="settings-section">
+        <h3>パスワード変更</h3>
+        <form id="passwordForm" class="settings-form">
+          <div class="form-group">
+            <label for="currentPassword">現在のパスワード <span style="color: #c62828;">*</span></label>
+            <input type="password" id="currentPassword" required aria-label="現在のパスワード" aria-required="true">
+          </div>
+          <div class="form-group">
+            <label for="newPassword">新しいパスワード <span style="color: #c62828;">*</span></label>
+            <input type="password" id="newPassword" required aria-label="新しいパスワード（6文字以上）" aria-required="true" minlength="6">
+            <span class="form-hint">6文字以上で入力してください</span>
+          </div>
+          <div class="form-group">
+            <label for="confirmPassword">新しいパスワード（確認） <span style="color: #c62828;">*</span></label>
+            <input type="password" id="confirmPassword" required aria-label="新しいパスワードの確認" aria-required="true" minlength="6">
+          </div>
+          <div id="passwordMessage" class="message"></div>
+          <button type="submit" class="btn btn-primary">変更</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>
+
