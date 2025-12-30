@@ -23,8 +23,35 @@ const path = require('path');
 const axios = require('axios');
 const fs = require('fs');
 const multer = require('multer');
-const { logError, logWarn, logInfo, logDebug } = require('./utils/logger');
-const { validateVideoPlan, validatePostedVideo } = require('./middleware/validation');
+// ロガーとバリデーションの読み込み（エラーハンドリング付き）
+let logError, logWarn, logInfo, logDebug;
+let validateVideoPlan, validatePostedVideo;
+
+try {
+  const logger = require('./utils/logger');
+  logError = logger.logError;
+  logWarn = logger.logWarn;
+  logInfo = logger.logInfo;
+  logDebug = logger.logDebug;
+} catch (err) {
+  console.error('Failed to load logger:', err);
+  // フォールバック関数を提供
+  logError = (msg, err) => console.error('[ERROR]', msg, err);
+  logWarn = (msg) => console.warn('[WARN]', msg);
+  logInfo = (msg) => console.log('[INFO]', msg);
+  logDebug = (msg, data) => console.log('[DEBUG]', msg, data);
+}
+
+try {
+  const validation = require('./middleware/validation');
+  validateVideoPlan = validation.validateVideoPlan;
+  validatePostedVideo = validation.validatePostedVideo;
+} catch (err) {
+  console.error('Failed to load validation:', err);
+  // フォールバック関数を提供
+  validateVideoPlan = (req, res, next) => next();
+  validatePostedVideo = (req, res, next) => next();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,9 +97,17 @@ if (SESSION_SECRET && SESSION_SECRET.length < 32) {
   console.warn('警告: SESSION_SECRETは32文字以上にすることを推奨します。');
 }
 
-// アップロードディレクトリの作成
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// アップロードディレクトリの作成（エラーハンドリング付き）
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.error('[ERROR] アップロードディレクトリの作成に失敗しました:', err);
+  // Vercel環境では書き込み可能なディレクトリが限られているため、エラーを無視
+  if (!isVercel) {
+    throw err; // ローカル環境ではエラーを投げる
+  }
 }
 
 // 画像アップロード設定の共通関数
