@@ -1,7 +1,23 @@
-require('dotenv').config();
+// 環境変数の読み込み（Vercel環境では不要だが、ローカル開発では必要）
+try {
+  require('dotenv').config();
+} catch (err) {
+  // dotenvが利用できない場合は無視（Vercel環境では環境変数が自動的に設定される）
+  console.log('dotenv not available, using environment variables directly');
+}
+
 const express = require('express');
 const session = require('express-session');
-const sqlite3 = require('sqlite3').verbose();
+
+// sqlite3の読み込み（エラーハンドリング付き）
+let sqlite3;
+try {
+  sqlite3 = require('sqlite3').verbose();
+} catch (err) {
+  console.error('Failed to load sqlite3:', err);
+  throw new Error('SQLite3 module could not be loaded. This may be a native module compilation issue.');
+}
+
 const bcrypt = require('bcrypt');
 const path = require('path');
 const axios = require('axios');
@@ -127,7 +143,13 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static('public'));
+// 静的ファイルの配信
+// Vercel環境では、vercel.jsonで静的ファイルの配信を設定しているため、
+// ここではすべてのリクエストを処理する（静的ファイルはVercelが自動的に配信）
+app.use(express.static('public', { 
+  // Vercel環境では、静的ファイルが見つからない場合も続行
+  fallthrough: isVercel 
+}));
 
 // データベース初期化の状態を追跡
 let dbInitialized = false;
@@ -313,10 +335,27 @@ app.use('/api', async (req, res, next) => {
     next();
   } catch (err) {
     logError('データベース初期化ミドルウェアエラー:', err);
-    res.status(500).json({ 
-      error: 'データベースの初期化に失敗しました',
-      message: err.message 
+    logError('エラー詳細:', {
+      message: err.message,
+      stack: err.stack,
+      name: err.name,
+      code: err.code
     });
+    
+    // レスポンスがまだ送信されていない場合のみエラーを送信
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'データベースの初期化に失敗しました',
+        message: err.message,
+        ...(process.env.NODE_ENV !== 'production' && {
+          details: {
+            name: err.name,
+            code: err.code,
+            stack: err.stack
+          }
+        })
+      });
+    }
   }
 });
 
